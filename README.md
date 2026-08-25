@@ -8,8 +8,8 @@ Production-grade cloud platform, containerization, Infrastructure as Code (Terra
 
 ```mermaid
 graph TD
-    Dev[Developer] -->|Git Commit| GH[GitHub Repo]
-    GH -->|PR Trigger| CI[GitHub Actions CI Pipeline]
+    Dev[Developer] -->|Git Push| GH[GitHub Repo]
+    GH -->|Trigger Actions| CI[GitHub Actions CI/CD Pipeline]
     
     subgraph Security & Quality Gates
         CI -->|Lint & Test| PYTEST[Flake8 / Pytest]
@@ -19,8 +19,8 @@ graph TD
     
     DOCKER -->|Push Image| ECR[AWS ECR Private Registry]
 
-    subgraph AWS Cloud Platform (Terraform Managed)
-        subgraph VPC Network (10.30.0.0/16)
+    subgraph AWS Cloud Platform - Terraform Managed
+        subgraph VPC Network - 10.30.0.0/16
             ALB[AWS Application Load Balancer]
             
             subgraph Private Subnets
@@ -36,64 +36,101 @@ graph TD
         end
 
         S3[(AWS S3 Model Artifact Storage)]
+        SECMGR[AWS Secrets Manager]
     end
 
-    ARGO[Argo CD GitOps] -->|Sync Helm Manifests| EKS
-    ALB --> ING --> PODS
-    PODS --> RDS & REDIS & S3
+    ALB --> ING
+    ING --> PODS
+    PODS --> RDS
+    PODS --> REDIS
+    PODS --> S3
 ```
 
 ---
 
 ## 📂 Repository Structure
 
-```
+```text
 .
-├── src/                                 # Production FastAPI Python ML Application
+├── bootstrap/                           # Safe 2-Step Terraform State Bootstrap (S3 + DynamoDB)
+│   ├── main.tf
+│   ├── variables.tf
+│   └── outputs.tf
+│
+├── aws/                                 # AWS Cloud Infrastructure Resources
+│   ├── vpc.tf                           # 3-AZ VPC, Subnets, NAT, IGW, Route Tables
+│   ├── eks.tf                           # EKS Cluster v1.30, Node Groups & OIDC Provider
+│   ├── ecr.tf                           # Immutable ECR Registry with scan-on-push
+│   ├── rds.tf                           # PostgreSQL Multi-AZ DB Cluster
+│   ├── redis.tf                         # ElastiCache Redis Replication Group
+│   ├── iam.tf                           # EKS Cluster & Worker Node IAM Roles
+│   ├── secrets.tf                       # AWS Secrets Manager Secret & Versions
+│   ├── dns.tf                           # Route 53 Hosted Zone
+│   ├── acm.tf                           # ACM TLS Certificate with DNS Validation
+│   └── monitoring.tf                    # CloudWatch Log Groups for EKS & Application
+│
+├── kubernetes/                          # Kubernetes Platform Resources
+│   ├── namespace.tf                     # Namespace resource
+│   ├── serviceaccount.tf                # EKS IRSA ServiceAccount
+│   ├── rbac.tf                          # Role & RoleBinding
+│   ├── configmap.tf                     # Environment ConfigMap
+│   ├── deployment.tf                    # Rolling Update Deployment & SecurityContext
+│   ├── service.tf                       # ClusterIP Service
+│   ├── ingress.tf                       # AWS Load Balancer Controller Ingress
+│   ├── hpa.tf                           # Horizontal Pod Autoscaler (2-15 pods)
+│   ├── pdb.tf                           # Pod Disruption Budget
+│   └── networkpolicy.tf                 # Network Policy Isolation
+│
+├── github/                              # GitHub Platform & OIDC Integration
+│   ├── repository.tf                    # Repository settings
+│   ├── environments.tf                  # Dev, Staging, Production environments
+│   ├── branch_protection.tf             # Main branch protection rules
+│   ├── secrets.tf                       # Actions Secrets
+│   └── oidc.tf                          # AWS IAM OIDC Provider & Roles
+│
+├── ci-cd/                               # GitHub Actions Workflow Templates
+│   ├── ci.yml                           # Lint, Pytest, SAST & Docker Scan
+│   ├── deploy-dev.yml                   # DEV Deployment
+│   ├── deploy-staging.yml               # STAGING Deployment
+│   └── deploy-production.yml            # PRODUCTION Deployment with Approval Gate
+│
+├── src/                                 # Production FastAPI Machine Learning Backend
 │   ├── app/
 │   │   ├── api/                         # /health, /ready, /metrics, /predict, /forecast
-│   │   ├── core/                        # Settings & JSON Logging
+│   │   ├── core/                        # Settings & Structured JSON Logging
 │   │   ├── db/                          # Async PostgreSQL & Redis Clients
-│   │   ├── models/                      # ARIMA-LSTM/GRU/CNN Hybrid Machine Learning Engine
-│   │   └── main.py                      # Application Entrypoint
+│   │   ├── models/                      # ARIMA-LSTM/GRU/CNN Hybrid ML Engine
+│   │   └── main.py                      # FastAPI Server Entrypoint
 │   └── data/GDP.csv                     # Historical GDP Dataset
-├── tests/                               # Pytest Unit & Integration Suite
-├── Dockerfile                           # Multi-stage Security-hardened Dockerfile
+│
+├── tests/                               # Pytest Unit & Integration Test Suite
+├── Dockerfile                           # Security-Hardened Multi-Stage Dockerfile
 ├── docker-compose.yml                   # Local Development Environment
-├── terraform/                           # Modular Infrastructure as Code
-│   ├── modules/                         # network, iam, ecr, eks, rds, redis, s3, monitoring
-│   └── environments/                    # dev, staging, production
 ├── helm/                                # Production Kubernetes Helm Chart
 │   └── gdp-prediction-app/
-├── gitops/                              # Argo CD Manifests (App-of-Apps Pattern)
-├── .github/workflows/                   # CI, CD-Dev, CD-Staging, CD-Production Pipelines
-├── monitoring/                          # Prometheus Alerts & Grafana Dashboard
-├── scripts/                             # Smoke test & DR Automation Scripts
+├── gitops/                              # Argo CD App-of-Apps GitOps Manifests
+├── monitoring/                          # Prometheus Alert Rules & Grafana Dashboard
+├── scripts/                             # Smoke Test, Health Check & DR Automation Scripts
 ├── docs/                                # Architecture, DR, Secrets & Troubleshooting Runbooks
-└── Makefile                             # Developer CLI Command Automation
+├── Makefile                             # Developer CLI Command Automation
+└── terraform.tfvars.example             # Example Terraform Variables Template
 ```
 
 ---
 
 ## ⚡ Quick Start & Local Development
 
-### Prerequisites
-- Docker & Docker Compose
-- Python 3.11+
-- Terraform >= 1.7.0
-- Helm 3
-
-### 1. Run Local Environment
-Spin up the FastAPI service, PostgreSQL, Redis, Prometheus, and Grafana in one command:
+### 1. Run Local Stack
+Spin up FastAPI, PostgreSQL, Redis, Prometheus, and Grafana:
 ```bash
 make docker-up
 ```
-- **API Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Health Check**: [http://localhost:8000/health](http://localhost:8000/health)
+- **API Documentation**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Health Endpoint**: [http://localhost:8000/health](http://localhost:8000/health)
 - **Prometheus Metrics**: [http://localhost:8000/metrics](http://localhost:8000/metrics)
-- **Grafana Dashboard**: [http://localhost:3000](http://localhost:3000) (admin / admin)
+- **Grafana Dashboard**: [http://localhost:3000](http://localhost:3000) (`admin` / `admin`)
 
-### 2. Run Tests & Code Quality Checks
+### 2. Run Test Suite & Linters
 ```bash
 make test
 make lint
@@ -101,24 +138,25 @@ make lint
 
 ---
 
-## 🚀 Cloud Infrastructure & Deployment
+## 🚀 Cloud Provisioning with Terraform
 
-### 1. Provision Infrastructure via Terraform
+### Step 1: Bootstrap Remote State (S3 + DynamoDB)
 ```bash
-make tf-init
-make tf-plan ENV=production
-make tf-apply ENV=production
+make bootstrap
 ```
 
-### 2. Deploy via Helm
+### Step 2: Provision Complete AWS & Kubernetes Infrastructure
 ```bash
-make helm-lint
-make deploy-dev
+cp terraform.tfvars.example terraform.tfvars
+make init
+make plan
+make apply
 ```
 
 ---
 
 ## 🛡️ Security & DevSecOps Controls
 - **Non-Root Containers**: Runs as UID `10001` (`appuser`) with read-only root filesystem.
+- **Zero Long-Lived AWS Keys**: Uses AWS OpenID Connect (OIDC) federated authentication for GitHub Actions.
 - **Automated Security Gates**: Gitleaks secret detection, Bandit SAST, Trivy container scanning, TFSec Terraform scanning.
-- **Least Privilege IAM**: IRSA (IAM Roles for Service Accounts) used for AWS resource access.
+- **Network Isolation**: Private subnets for EKS Nodes, RDS PostgreSQL, and ElastiCache Redis.
