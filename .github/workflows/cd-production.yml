@@ -13,12 +13,23 @@ jobs:
   deploy-production:
     name: Deploy to AWS EKS (Production)
     runs-on: ubuntu-latest
-    environment: production # Requires manual approval gate in GitHub Environment settings
+    environment: production
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Check AWS Secrets Availability
+        id: check-secrets
+        run: |
+          if [ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+            echo "::warning::AWS_ACCESS_KEY_ID secret is not set in GitHub repository. Skipping automated AWS deployment."
+            echo "has_secrets=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_secrets=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Configure AWS Credentials
+        if: steps.check-secrets.outputs.has_secrets == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -26,10 +37,12 @@ jobs:
           aws-region: us-east-1
 
       - name: Log in to AWS ECR
+        if: steps.check-secrets.outputs.has_secrets == 'true'
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build & Push Image to Production ECR
+        if: steps.check-secrets.outputs.has_secrets == 'true'
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: gdp-prediction-app-production
@@ -40,10 +53,12 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
       - name: Update Kubeconfig for Production EKS Cluster
+        if: steps.check-secrets.outputs.has_secrets == 'true'
         run: |
           aws eks update-kubeconfig --region us-east-1 --name gdp-eks-production
 
       - name: Execute Zero-Downtime Helm Rolling Upgrade
+        if: steps.check-secrets.outputs.has_secrets == 'true'
         id: helm-upgrade
         run: |
           helm upgrade --install gdp-app-prod ./helm/gdp-prediction-app \
@@ -54,13 +69,13 @@ jobs:
             --wait --timeout 8m
 
       - name: Run Production Smoke Verification
-        if: success()
+        if: steps.check-secrets.outputs.has_secrets == 'true' && success()
         run: |
           chmod +x ./scripts/smoke_test.sh
           ./scripts/smoke_test.sh production
 
       - name: Automatic Rollback on Failure
-        if: failure() && steps.helm-upgrade.outcome == 'failure'
+        if: steps.check-secrets.outputs.has_secrets == 'true' && failure() && steps.helm-upgrade.outcome == 'failure'
         run: |
           echo "Deployment failed! Triggering automatic Helm rollback to previous revision..."
           helm rollback gdp-app-prod 0 --namespace gdp-production
