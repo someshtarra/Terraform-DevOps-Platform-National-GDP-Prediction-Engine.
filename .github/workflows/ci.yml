@@ -1,0 +1,105 @@
+name: Continuous Integration (CI)
+
+on:
+  push:
+    branches: [ main, dev, staging ]
+  pull_request:
+    branches: [ main, dev, staging ]
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+
+jobs:
+  lint-and-test:
+    name: Code Quality & Testing
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r src/requirements.txt pytest-cov flake8 black bandit
+
+      - name: Code Formatting Check (Black)
+        run: |
+          black --check src tests
+
+      - name: Code Linting (Flake8)
+        run: |
+          flake8 src tests --max-line-length=120 --ignore=E203,W503
+
+      - name: Execute Unit & Integration Tests (Pytest)
+        run: |
+          pytest --cov=src --cov-report=xml --cov-report=term-missing tests/
+
+      - name: Static Application Security Testing (Bandit SAST)
+        run: |
+          bandit -r src/ -x tests/ -f txt
+
+  security-scans:
+    name: Security Scans (Secrets & Terraform & Helm)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Secret Detection (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
+      - name: Terraform Format Check
+        run: |
+          terraform fmt -check -recursive terraform/
+
+      - name: Terraform Security Scan (Tfsec)
+        uses: aquasecurity/tfsec-action@v1.0.0
+        with:
+          working_directory: terraform/
+
+      - name: Helm Lint
+        run: |
+          helm lint helm/gdp-prediction-app/
+
+  docker-build-scan:
+    name: Container Build & Vulnerability Scan
+    runs-on: ubuntu-latest
+    needs: [lint-and-test, security-scans]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          tags: gdp-prediction-app:${{ github.sha }}
+
+      - name: Scan Docker Image (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'gdp-prediction-app:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'

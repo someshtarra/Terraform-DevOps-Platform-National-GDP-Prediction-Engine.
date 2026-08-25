@@ -1,0 +1,8 @@
+aws_region         = "us-east-1"
+environment        = "staging"
+vpc_cidr           = "10.20.0.0/16"
+cluster_name       = "gdp-eks"
+kubernetes_version = "1.30"
+db_instance_class  = "db.t4g.small"
+db_name            = "gdp_db_staging"
+redis_node_type    = "cache.t4g.micro"

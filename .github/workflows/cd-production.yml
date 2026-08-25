@@ -1,0 +1,66 @@
+name: CD - Deploy to Production
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-production:
+    name: Deploy to AWS EKS (Production)
+    runs-on: ubuntu-latest
+    environment: production # Requires manual approval gate in GitHub Environment settings
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Log in to AWS ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & Push Image to Production ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: gdp-prediction-app-production
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+      - name: Update Kubeconfig for Production EKS Cluster
+        run: |
+          aws eks update-kubeconfig --region us-east-1 --name gdp-eks-production
+
+      - name: Execute Zero-Downtime Helm Rolling Upgrade
+        id: helm-upgrade
+        run: |
+          helm upgrade --install gdp-app-prod ./helm/gdp-prediction-app \
+            --namespace gdp-production --create-namespace \
+            --values ./helm/gdp-prediction-app/values-production.yaml \
+            --set image.repository=${{ steps.login-ecr.outputs.registry }}/gdp-prediction-app-production \
+            --set image.tag=${{ github.sha }} \
+            --wait --timeout 8m
+
+      - name: Run Production Smoke Verification
+        if: success()
+        run: |
+          chmod +x ./scripts/smoke_test.sh
+          ./scripts/smoke_test.sh production
+
+      - name: Automatic Rollback on Failure
+        if: failure() && steps.helm-upgrade.outcome == 'failure'
+        run: |
+          echo "Deployment failed! Triggering automatic Helm rollback to previous revision..."
+          helm rollback gdp-app-prod 0 --namespace gdp-production

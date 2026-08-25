@@ -1,0 +1,8 @@
+aws_region         = "us-east-1"
+environment        = "production"
+vpc_cidr           = "10.30.0.0/16"
+cluster_name       = "gdp-eks"
+kubernetes_version = "1.30"
+db_instance_class  = "db.m6g.large"
+db_name            = "gdp_db_prod"
+redis_node_type    = "cache.m6g.large"

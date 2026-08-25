@@ -1,0 +1,12 @@
+apiVersion: v2
+name: gdp-prediction-app
+description: Production Helm Chart for National GDP Prediction Engine
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - gdp
+  - machine-learning
+  - arima
+  - lstm
+  - fastapi

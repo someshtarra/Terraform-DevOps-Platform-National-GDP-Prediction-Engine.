@@ -1,0 +1,14 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "gdp-prediction-app.fullname" . }}
+  labels:
+    app.kubernetes.io/name: {{ include "gdp-prediction-app.name" . }}
+spec:
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "gdp-prediction-app.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}

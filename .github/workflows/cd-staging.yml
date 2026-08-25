@@ -1,0 +1,58 @@
+name: CD - Deploy to Staging
+
+on:
+  push:
+    tags:
+      - 'v*.*.*-rc*'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-staging:
+    name: Deploy to AWS EKS (Staging)
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Log in to AWS ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & Push Image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: gdp-prediction-app-staging
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Update Kubeconfig for EKS
+        run: |
+          aws eks update-kubeconfig --region us-east-1 --name gdp-eks-staging
+
+      - name: Deploy Helm Chart to Staging Namespace
+        run: |
+          helm upgrade --install gdp-app-staging ./helm/gdp-prediction-app \
+            --namespace gdp-staging --create-namespace \
+            --values ./helm/gdp-prediction-app/values-staging.yaml \
+            --set image.repository=${{ steps.login-ecr.outputs.registry }}/gdp-prediction-app-staging \
+            --set image.tag=${{ github.sha }} \
+            --wait --timeout 5m
+
+      - name: Run Staging Integration & Smoke Tests
+        run: |
+          chmod +x ./scripts/smoke_test.sh
+          ./scripts/smoke_test.sh staging

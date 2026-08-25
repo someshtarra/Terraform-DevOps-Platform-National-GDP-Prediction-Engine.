@@ -1,0 +1,29 @@
+replicaCount: 4
+
+env:
+  APP_ENV: "production"
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 2048Mi
+  requests:
+    cpu: 500m
+    memory: 1024Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 4
+  maxReplicas: 15
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+ingress:
+  hosts:
+    - host: gdp.api.domain.com
+      paths:
+        - path: /
+          pathType: Prefix

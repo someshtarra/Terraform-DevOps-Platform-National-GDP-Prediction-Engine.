@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gdp-prediction-dev
+  namespace: argocd
+  labels:
+    environment: dev
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/someshtarra/NATIONAL-GDP-PREDICTION-USING-TIME-SERIES-ANALYSIS-AND-DEEP-LEARNING-MODELS.git'
+    targetRevision: HEAD
+    path: helm/gdp-prediction-app
+    helm:
+      valueFiles:
+        - values-dev.yaml
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: gdp-dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

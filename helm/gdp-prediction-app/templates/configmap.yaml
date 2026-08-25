@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gdp-prediction-app.fullname" . }}-config
+  labels:
+    app.kubernetes.io/name: {{ include "gdp-prediction-app.name" . }}
+data:
+  APP_ENV: {{ .Values.env.APP_ENV | quote }}
+  POSTGRES_HOST: {{ .Values.env.POSTGRES_HOST | quote }}
+  POSTGRES_PORT: {{ .Values.env.POSTGRES_PORT | quote }}
+  POSTGRES_DB: {{ .Values.env.POSTGRES_DB | quote }}
+  REDIS_HOST: {{ .Values.env.REDIS_HOST | quote }}
+  REDIS_PORT: {{ .Values.env.REDIS_PORT | quote }}

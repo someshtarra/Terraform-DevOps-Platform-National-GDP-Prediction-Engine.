@@ -1,0 +1,24 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "gdp-prediction-app.fullname" . }}-role
+  labels:
+    app.kubernetes.io/name: {{ include "gdp-prediction-app.name" . }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "gdp-prediction-app.fullname" . }}-rolebinding
+  labels:
+    app.kubernetes.io/name: {{ include "gdp-prediction-app.name" . }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "gdp-prediction-app.fullname" . }}-role
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.serviceAccount.name }}
