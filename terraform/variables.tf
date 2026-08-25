@@ -45,3 +45,22 @@ variable "redis_node_type" {
   default     = "cache.t4g.micro"
   description = "ElastiCache Redis Node Type"
 }
+
+variable "github_owner" {
+  type        = string
+  default     = "someshtarra"
+  description = "GitHub Repository Owner / Organization"
+}
+
+variable "github_token" {
+  type        = string
+  default     = ""
+  sensitive   = true
+  description = "GitHub Personal Access Token for GitHub Provider"
+}
+
+variable "domain_name" {
+  type        = string
+  default     = "gdp.api.domain.com"
+  description = "Domain name for Route 53 and ACM Certificate"
+}

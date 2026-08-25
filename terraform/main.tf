@@ -1,3 +1,6 @@
+# ------------------------------------------------------------------------------
+# 1. AWS CLOUD PROVIDER INFRASTRUCTURE
+# ------------------------------------------------------------------------------
 module "network" {
   source       = "./modules/network"
   environment  = var.environment
@@ -38,6 +41,11 @@ module "database" {
   db_name               = var.db_name
 }
 
+module "secrets_manager" {
+  source      = "./modules/secrets-manager"
+  environment = var.environment
+}
+
 module "cache" {
   source                = "./modules/cache"
   environment           = var.environment
@@ -56,4 +64,30 @@ module "monitoring" {
   source       = "./modules/monitoring"
   environment  = var.environment
   cluster_name = "${var.cluster_name}-${var.environment}"
+}
+
+module "dns" {
+  source      = "./modules/dns"
+  domain_name = var.domain_name
+}
+
+# ------------------------------------------------------------------------------
+# 2. GITHUB PROVIDER INFRASTRUCTURE
+# ------------------------------------------------------------------------------
+module "github" {
+  source          = "./modules/github"
+  repository_name = "TERRAFORM"
+}
+
+# ------------------------------------------------------------------------------
+# 3. KUBERNETES PROVIDER WORKLOADS
+# ------------------------------------------------------------------------------
+module "k8s_workloads" {
+  source              = "./modules/k8s-workloads"
+  environment         = var.environment
+  ecr_repository_url  = module.container_registry.repository_url
+  domain_name         = var.domain_name
+  acm_certificate_arn = module.dns.certificate_arn
+
+  depends_on = [module.kubernetes]
 }
