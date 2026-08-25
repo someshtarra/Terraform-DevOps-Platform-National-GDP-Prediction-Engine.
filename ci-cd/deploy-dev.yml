@@ -1,0 +1,56 @@
+name: CD - Deploy to Dev
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-dev:
+    name: Deploy to AWS EKS (Dev)
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: us-east-1
+
+      - name: Log in to AWS ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & Push Image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: gdp-prediction-app-dev
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Update Kubeconfig for EKS
+        run: |
+          aws eks update-kubeconfig --region us-east-1 --name gdp-eks-dev
+
+      - name: Deploy Helm Chart to Dev Namespace
+        run: |
+          helm upgrade --install gdp-app-dev ./helm/gdp-prediction-app \
+            --namespace gdp-dev --create-namespace \
+            --values ./helm/gdp-prediction-app/values-dev.yaml \
+            --set image.repository=${{ steps.login-ecr.outputs.registry }}/gdp-prediction-app-dev \
+            --set image.tag=${{ github.sha }} \
+            --wait --timeout 5m
+
+      - name: Run Dev Smoke Tests
+        run: |
+          chmod +x ./scripts/smoke_test.sh
+          ./scripts/smoke_test.sh dev
