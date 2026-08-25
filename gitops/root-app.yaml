@@ -8,7 +8,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: 'https://github.com/someshtarra/NATIONAL-GDP-PREDICTION-USING-TIME-SERIES-ANALYSIS-AND-DEEP-LEARNING-MODELS.git'
+    repoURL: 'https://github.com/someshtarra/TERRAFORM.git'
     targetRevision: HEAD
     path: gitops
   destination:

@@ -6,7 +6,7 @@ provider "aws" {
       Project     = "National-GDP-Prediction"
       Environment = var.environment
       ManagedBy   = "Terraform"
-      Repository  = "https://github.com/someshtarra/NATIONAL-GDP-PREDICTION-USING-TIME-SERIES-ANALYSIS-AND-DEEP-LEARNING-MODELS"
+      Repository  = "https://github.com/someshtarra/TERRAFORM"
     }
   }
 }
