@@ -6,13 +6,13 @@ variable "aws_region" {
 
 variable "environment" {
   type        = string
-  default     = "dev"
+  default     = "production"
   description = "Environment name (dev, staging, production)"
 }
 
 variable "vpc_cidr" {
   type        = string
-  default     = "10.0.0.0/16"
+  default     = "10.30.0.0/16"
   description = "VPC CIDR Block"
 }
 
@@ -30,19 +30,19 @@ variable "kubernetes_version" {
 
 variable "db_instance_class" {
   type        = string
-  default     = "db.t4g.medium"
+  default     = "db.m6g.large"
   description = "RDS PostgreSQL Instance Class"
 }
 
 variable "db_name" {
   type        = string
-  default     = "gdp_db"
+  default     = "gdp_db_prod"
   description = "RDS Database Name"
 }
 
 variable "redis_node_type" {
   type        = string
-  default     = "cache.t4g.micro"
+  default     = "cache.m6g.large"
   description = "ElastiCache Redis Node Type"
 }
 
